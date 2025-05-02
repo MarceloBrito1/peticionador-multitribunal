@@ -1,0 +1,31 @@
+name: Build Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Build do instalador
+        run: npm run dist
+
+      - name: Upload do instalador
+        uses: actions/upload-artifact@v3
+        with:
+          name: instalador-windows
+          path: dist/*.exe
