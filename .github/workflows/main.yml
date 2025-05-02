@@ -1,0 +1,60 @@
+            - name: Build Container Installer
+  # You may pin to the exact commit or the version.
+  # uses: JasonN3/build-container-installer@f09a756b7a1205f121d8508f1171759328b95d2c
+  uses: JasonN3/build-container-installer@v1.2.4
+  with:
+    # Version of the action container to run
+    action_version: # optional
+    # Space delimited list of additional Lorax templates to include
+    additional_templates: # optional
+    # Architecture for image to build
+    arch: # default is x86_64
+    # Overrides the dnf cache key
+    dnf_cache_key: # optional
+    # Whether to enable caching for dnf
+    enable_cache_dnf: # optional, default is true
+    # Whether to enable caching for skopeo
+    enable_cache_skopeo: # optional, default is false
+    # Whether to enable automatically determining Flatpak dependencies
+    enable_flatpak_dependencies: # optional, default is true
+    # Used for supporting secure boot (requires SECURE_BOOT_KEY_URL to be defined)
+    enrollment_password: # optional, default is container-installer
+    # Extra params used by grub to boot the anaconda installer
+    extra_boot_params: # optional
+    # Name of the Flatpak repo on the destination OS
+    flatpak_remote_name: # optional, default is flathub
+    # Space separated list of flatpak refs to install
+    flatpak_remote_refs: # optional, default is 
+    # Directory that contains files that list the flatpak refs to install
+    flatpak_remote_refs_dir: # optional, default is 
+    # URL of the flatpakrepo file
+    flatpak_remote_url: # optional, default is https://flathub.org/repo/flathub.flatpakrepo
+    # Name of the source container image
+    image_name: # default is base
+    # Repository containing the source container image
+    image_repo: # default is quay.io/fedora-ostree-desktops
+    # Whether the container image is signed. The policy to test the signing must be configured inside the container image
+    image_signed: # optional, default is true
+    # Overrides the source of the container image. Must be formatted for the skopeo copy command
+    image_src: # optional
+    # Tag of the source container image
+    image_tag: # optional
+    # Name of the ISO you wish to output when completed
+    iso_name: # optional, default is build/deploy.iso
+    # Overrides the default make target
+    make_target: # optional
+    # List of repo files for Lorax to use
+    repos: # optional
+    # The size (in GiB) for the squashfs runtime volume
+    rootfs_size: # optional, default is 2
+    # Secure boot key that is installed from URL location
+    secure_boot_key_url: # optional
+    # Overrides the skopeo cache key
+    skopeo_cache_key: # optional
+    # Source container variant. Available options can be found by running `dnf provides system-release`. Variant will be the third item in the package name. Example: `fedora-release-kinoite-39-34.noarch` will be kinonite
+    variant: # default is Server
+    # Fedora version of installer to build
+    version: # default is 39
+    # Enable Anaconda WebUI
+    web_ui: # optional, default is false
+          
