@@ -1,0 +1,33 @@
+{
+  "name": "peticionador-multitribunal",
+  "version": "1.0.0",
+  "description": "Sistema Peticionador Multitribunal com integração a robôs de automação judicial",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.peticionador.multitribunal",
+    "productName": "Peticionador Multitribunal",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.2"
+  }
+}
