@@ -39,7 +39,8 @@ function detectPython() {
       const versao = res.stdout || res.stderr || "";
       return {
         ok: true,
-        command: `${candidato.cmd} ${candidato.args.join(" ")}`.trim(),
+        command: candidato.cmd,
+        argsVersion: candidato.args,
         version: versao,
       };
     }
@@ -47,7 +48,8 @@ function detectPython() {
 
   return {
     ok: false,
-    command: null,
+    command: "",
+    argsVersion: [],
     version: "",
   };
 }
@@ -57,14 +59,10 @@ function checkSelenium(pyCommand) {
     return { ok: false, detail: "Python nao encontrado." };
   }
 
-  const partes = pyCommand.split(" ");
-  const cmd = partes[0];
-  const argsBase = partes.slice(1);
-  const args = argsBase.concat([
+  const res = run(pyCommand, [
     "-c",
     "import importlib.util; print(bool(importlib.util.find_spec('selenium')))",
   ]);
-  const res = run(cmd, args);
   if (!res.ok) {
     return { ok: false, detail: res.stderr || "Falha ao validar selenium." };
   }
@@ -78,11 +76,37 @@ function checkSelenium(pyCommand) {
 function checkBrowsers() {
   const edge = run("where", ["msedge"]);
   const chrome = run("where", ["chrome"]);
+  const edgeDefaults = [
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+  ].filter((item) => fs.existsSync(item));
+  const chromeDefaults = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  ].filter((item) => fs.existsSync(item));
+
+  const edgeWhere = edge.ok
+    ? edge.stdout
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+  const chromeWhere = chrome.ok
+    ? chrome.stdout
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+  const edgePaths = Array.from(new Set(edgeWhere.concat(edgeDefaults)));
+  const chromePaths = Array.from(new Set(chromeWhere.concat(chromeDefaults)));
+
   return {
-    edge: edge.ok,
-    chrome: chrome.ok,
-    edgePath: edge.ok ? edge.stdout.split(/\r?\n/)[0] : "",
-    chromePath: chrome.ok ? chrome.stdout.split(/\r?\n/)[0] : "",
+    edge: edgePaths.length > 0,
+    chrome: chromePaths.length > 0,
+    edgePath: edgePaths[0] || "",
+    chromePath: chromePaths[0] || "",
+    edgePaths,
+    chromePaths,
   };
 }
 
