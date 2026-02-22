@@ -92,6 +92,7 @@ No modo `real`, os robos `robo_tjsp.py` e `robo_tjsp2.py`:
 - Salvam screenshots locais em `PETICIONADOR_DATA_DIR\automacao`.
 - Salvam relatorio local por protocolo em `PETICIONADOR_DATA_DIR\automacao\*_execucao.json` (sem senha do certificado).
 - Tentam abrir comprovante/recibo, extraem numero oficial do protocolo na tela e salvam evidencia HTML/PDF local.
+- Usam perfil de seletores por modulo (`petpg`, `petsg`, `petcr`, `eproc`) com fallback generico para preenchimento e upload.
 
 Variaveis opcionais de ambiente para ajuste:
 

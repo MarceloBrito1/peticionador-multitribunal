@@ -25,6 +25,91 @@ PROTOCOLO_REGEXES = [
     r"protocolo(?:\s*(?:n[ou]|n[ou]mero|no|n\.?|:|#|º|°)*)\s*([A-Za-z0-9./-]{6,50})",
     r"n[ou]mero\s+do\s+protocolo\s*[:#-]?\s*([A-Za-z0-9./-]{6,50})",
 ]
+SELETORES_NUMERO_PROCESSO_PADRAO = [
+    "input[name*='processo']",
+    "input[id*='processo']",
+    "input[name*='numprocesso']",
+    "input[id*='numprocesso']",
+    "input[name*='numero']",
+    "input[id*='numero']",
+    "input[placeholder*='processo']",
+]
+SELETORES_DESCRICAO_PADRAO = [
+    "textarea[name*='descricao']",
+    "textarea[id*='descricao']",
+    "textarea[name*='observ']",
+    "textarea[id*='observ']",
+]
+SELETORES_UPLOAD_PADRAO = [
+    "input[type='file']",
+]
+SELETORES_POR_MODULO = {
+    "petpg": {
+        "numeroProcesso": [
+            "#numeroProcesso",
+            "input[name='numeroProcesso']",
+            "input[name='dadosPeticao.numeroProcesso']",
+        ],
+        "descricao": [
+            "#descricaoPeticao",
+            "textarea[name='descricaoPeticao']",
+            "textarea[name='dadosPeticao.descricao']",
+        ],
+        "upload": [
+            "input[name='arquivoPeticao']",
+            "input[name='peticao.arquivo']",
+        ],
+    },
+    "petsg": {
+        "numeroProcesso": [
+            "#numeroProcesso",
+            "input[name='numeroProcesso']",
+            "input[name='dadosPeticao.numeroProcesso']",
+        ],
+        "descricao": [
+            "#descricaoPeticao",
+            "textarea[name='descricaoPeticao']",
+            "textarea[name='dadosPeticao.descricao']",
+        ],
+        "upload": [
+            "input[name='arquivoPeticao']",
+            "input[name='peticao.arquivo']",
+        ],
+    },
+    "petcr": {
+        "numeroProcesso": [
+            "#numeroProcesso",
+            "input[name='numeroProcesso']",
+            "input[name='dadosPeticao.numeroProcesso']",
+        ],
+        "descricao": [
+            "#descricaoPeticao",
+            "textarea[name='descricaoPeticao']",
+            "textarea[name='dadosPeticao.descricao']",
+        ],
+        "upload": [
+            "input[name='arquivoPeticao']",
+            "input[name='peticao.arquivo']",
+        ],
+    },
+    "eproc": {
+        "numeroProcesso": [
+            "input[name='num_processo']",
+            "input[name='numeroProcesso']",
+            "#txtNumProcesso",
+        ],
+        "descricao": [
+            "textarea[name='descricao']",
+            "textarea[name='observacao']",
+            "#txtDescricao",
+        ],
+        "upload": [
+            "input[name='arquivo']",
+            "input[name='anexo']",
+            "input[id*='upload']",
+        ],
+    },
+}
 
 
 def carregar_payload() -> Dict[str, Any]:
@@ -130,6 +215,43 @@ def obter_fluxo_tjsp(payload: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(fluxo, dict):
         return fluxo
     return {}
+
+
+def unir_listas_ordenadas(*listas: List[str]) -> List[str]:
+    saida: List[str] = []
+    vistos = set()
+    for lista in listas:
+        for item in lista:
+            valor = texto_limpo(item)
+            if not valor or valor in vistos:
+                continue
+            vistos.add(valor)
+            saida.append(valor)
+    return saida
+
+
+def perfil_seletores_fluxo(acesso: Dict[str, str], fluxo_tjsp: Dict[str, Any]) -> Dict[str, List[str]]:
+    modulo = texto_limpo(fluxo_tjsp.get("modulo")).lower()
+    canal = texto_limpo(acesso.get("canal")).lower()
+
+    if not modulo and canal == "eproc":
+        modulo = "eproc"
+
+    perfil_modulo = SELETORES_POR_MODULO.get(modulo, {})
+    return {
+        "numeroProcesso": unir_listas_ordenadas(
+            perfil_modulo.get("numeroProcesso", []),
+            SELETORES_NUMERO_PROCESSO_PADRAO,
+        ),
+        "descricao": unir_listas_ordenadas(
+            perfil_modulo.get("descricao", []),
+            SELETORES_DESCRICAO_PADRAO,
+        ),
+        "upload": unir_listas_ordenadas(
+            perfil_modulo.get("upload", []),
+            SELETORES_UPLOAD_PADRAO,
+        ),
+    }
 
 
 def executar_powershell(script: str, *args: str, timeout: int = 90) -> subprocess.CompletedProcess:
@@ -368,30 +490,31 @@ def preparar_formulario_para_upload(driver: Any, fluxo_tjsp: Dict[str, Any]) -> 
     return False, ""
 
 
-def anexar_arquivo(driver: Any, caminho_arquivo: str) -> bool:
+def anexar_arquivo(driver: Any, caminho_arquivo: str, seletores_upload: List[str]) -> bool:
     try:
         from selenium.webdriver.common.by import By
     except Exception:
         return False
 
     destino = str(Path(caminho_arquivo).resolve())
-    elementos = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-    for elemento in elementos:
-        try:
-            elemento.send_keys(destino)
-            return True
-        except Exception:
+    for seletor in seletores_upload:
+        elementos = driver.find_elements(By.CSS_SELECTOR, seletor)
+        for elemento in elementos:
             try:
-                driver.execute_script(
-                    "arguments[0].style.display='block';"
-                    "arguments[0].style.visibility='visible';"
-                    "arguments[0].removeAttribute('hidden');",
-                    elemento,
-                )
                 elemento.send_keys(destino)
                 return True
             except Exception:
-                continue
+                try:
+                    driver.execute_script(
+                        "arguments[0].style.display='block';"
+                        "arguments[0].style.visibility='visible';"
+                        "arguments[0].removeAttribute('hidden');",
+                        elemento,
+                    )
+                    elemento.send_keys(destino)
+                    return True
+                except Exception:
+                    continue
     return False
 
 
@@ -648,15 +771,11 @@ def executar_fluxo_real(
         if img:
             screenshots.append(img)
 
+        perfil_seletores = perfil_seletores_fluxo(acesso, fluxo_tjsp)
+
         preencher_processo = tentar_preencher_texto(
             driver,
-            [
-                "input[name*='processo']",
-                "input[id*='processo']",
-                "input[name*='numero']",
-                "input[id*='numero']",
-                "input[placeholder*='processo']",
-            ],
+            perfil_seletores["numeroProcesso"],
             texto_limpo(payload.get("numeroProcesso")),
         )
         if preencher_processo:
@@ -664,12 +783,7 @@ def executar_fluxo_real(
 
         preencher_descricao = tentar_preencher_texto(
             driver,
-            [
-                "textarea[name*='descricao']",
-                "textarea[id*='descricao']",
-                "textarea[name*='observ']",
-                "textarea[id*='observ']",
-            ],
+            perfil_seletores["descricao"],
             texto_limpo(payload.get("descricao")),
         )
         if preencher_descricao:
@@ -679,7 +793,7 @@ def executar_fluxo_real(
         if acionou_auxiliar:
             passos.append(f"botao_auxiliar:{botao_auxiliar}")
 
-        upload_ok = anexar_arquivo(driver, arquivo_peticao)
+        upload_ok = anexar_arquivo(driver, arquivo_peticao, perfil_seletores["upload"])
         if upload_ok:
             passos.append("arquivo_anexado")
         img = salvar_screenshot(driver, protocolo, "03_formulario")
@@ -748,6 +862,11 @@ def executar_fluxo_real(
             "referenciaTela": referencia_tela,
             "protocoloOficial": protocolo_oficial,
             "fluxoTjsp": fluxo_tjsp,
+            "perfilSeletores": {
+                "numeroProcesso": perfil_seletores["numeroProcesso"][:10],
+                "descricao": perfil_seletores["descricao"][:10],
+                "upload": perfil_seletores["upload"][:10],
+            },
             "passos": passos,
             "certificadoImportado": bool(importacao.get("importado")),
             "screenshots": screenshots,
