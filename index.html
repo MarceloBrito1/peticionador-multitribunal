@@ -1,1 +1,223 @@
-<!-- Interface final com dashboard e painel -->
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Peticionador Multitribunal</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Peticionador Multitribunal</h1>
+        <p id="session-meta">Sem sessao ativa.</p>
+      </div>
+      <button id="logout-btn" class="secondary hidden" type="button">Sair</button>
+    </header>
+
+    <main class="page">
+      <section id="auth-section" class="card auth-card">
+        <div class="card-title">
+          <h2>Acesso</h2>
+          <p>Admin padrao: admin@peticionador.local / admin123</p>
+        </div>
+
+        <div class="auth-grid">
+          <form id="login-form" class="panel">
+            <h3>Login</h3>
+            <label for="login-email">Email</label>
+            <input
+              id="login-email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              required
+            />
+
+            <label for="login-senha">Senha</label>
+            <input
+              id="login-senha"
+              name="senha"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+
+            <button type="submit">Entrar</button>
+          </form>
+
+          <form id="register-form" class="panel">
+            <h3>Novo usuario</h3>
+            <label for="register-nome">Nome</label>
+            <input id="register-nome" name="nome" type="text" required />
+
+            <label for="register-email">Email</label>
+            <input id="register-email" name="email" type="email" required />
+
+            <label for="register-senha">Senha</label>
+            <input id="register-senha" name="senha" type="password" required />
+
+            <label for="register-role">Perfil</label>
+            <select id="register-role" name="role">
+              <option value="operador">Operador</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            <button class="secondary" type="submit">Cadastrar</button>
+          </form>
+        </div>
+
+        <p id="auth-feedback" class="feedback"></p>
+      </section>
+
+      <section id="app-section" class="hidden">
+        <div class="grid">
+          <article class="card">
+            <div class="card-title">
+              <h2>Certificado A1</h2>
+            </div>
+            <form id="cert-form" class="panel">
+              <label for="cert-arquivo">Arquivo (.pfx/.p12)</label>
+              <div class="file-row">
+                <input id="cert-arquivo" name="arquivo" type="text" readonly required />
+                <button id="cert-arquivo-btn" class="secondary" type="button">
+                  Selecionar
+                </button>
+              </div>
+
+              <label for="cert-senha">Senha</label>
+              <input id="cert-senha" name="senha" type="password" required />
+
+              <button type="submit">Salvar certificado</button>
+            </form>
+            <p id="cert-status" class="feedback"></p>
+          </article>
+
+          <article class="card">
+            <div class="card-title">
+              <h2>Painel</h2>
+              <button id="refresh-dashboard" class="secondary" type="button">
+                Atualizar painel
+              </button>
+            </div>
+            <div id="stats-cards" class="stats"></div>
+            <div id="grafico-resumo" class="chart-box"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-title">
+              <h2>Novo envio</h2>
+            </div>
+            <form id="envio-form" class="panel">
+              <label for="tribunal">Tribunal</label>
+              <select id="tribunal" name="tribunal" required>
+                <option value="tjsp">TJSP</option>
+                <option value="tjsp2">TJSP 2 Grau</option>
+                <option value="trf3">TRF3</option>
+                <option value="trt2">TRT2</option>
+              </select>
+
+              <label for="numero-processo">Numero do processo</label>
+              <input id="numero-processo" name="numeroProcesso" type="text" required />
+
+              <label for="arquivo">Arquivo</label>
+              <div class="file-row">
+                <input id="arquivo" name="arquivo" type="text" readonly required />
+                <button id="arquivo-btn" class="secondary" type="button">
+                  Selecionar
+                </button>
+              </div>
+
+              <label for="descricao">Descricao</label>
+              <textarea id="descricao" name="descricao" rows="3"></textarea>
+
+              <label for="destinatarios">Notificar (email ou @telegram)</label>
+              <input
+                id="destinatarios"
+                name="destinatarios"
+                type="text"
+                placeholder="exemplo@dominio.com, @canal"
+              />
+
+              <button type="submit">Protocolar</button>
+            </form>
+            <pre id="envio-resultado" class="output"></pre>
+          </article>
+
+          <article class="card">
+            <div class="card-title">
+              <h2>Lote por PDFs</h2>
+            </div>
+            <form id="lote-form" class="panel">
+              <label for="lote-tribunal">Tribunal destino</label>
+              <select id="lote-tribunal" name="tribunal" required>
+                <option value="tjsp">TJSP</option>
+                <option value="tjsp2">TJSP 2 Grau</option>
+                <option value="trf3">TRF3</option>
+                <option value="trt2">TRT2</option>
+              </select>
+
+              <label for="lote-arquivos">PDFs das peticoes</label>
+              <div class="file-row">
+                <input id="lote-arquivos" name="arquivos" type="text" readonly required />
+                <button id="lote-arquivos-btn" class="secondary" type="button">
+                  Selecionar PDFs
+                </button>
+              </div>
+              <p id="lote-contagem" class="muted"></p>
+
+              <label for="lote-descricao">Descricao padrao</label>
+              <textarea id="lote-descricao" name="descricao" rows="2"></textarea>
+
+              <label for="lote-destinatarios">Notificar (email ou @telegram)</label>
+              <input
+                id="lote-destinatarios"
+                name="destinatarios"
+                type="text"
+                placeholder="exemplo@dominio.com, @canal"
+              />
+
+              <button type="submit">Protocolar lote</button>
+            </form>
+            <pre id="lote-resultado" class="output"></pre>
+          </article>
+
+          <article class="card">
+            <div class="card-title">
+              <h2>Auditoria recente</h2>
+              <button id="refresh-auditoria" class="secondary" type="button">
+                Atualizar logs
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>Tipo</th>
+                    <th>Usuario</th>
+                    <th>Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody id="auditoria-body"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article id="usuarios-card" class="card hidden">
+            <div class="card-title">
+              <h2>Usuarios</h2>
+              <button id="refresh-usuarios" class="secondary" type="button">
+                Atualizar usuarios
+              </button>
+            </div>
+            <ul id="usuarios-lista" class="list"></ul>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="graficos.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>
