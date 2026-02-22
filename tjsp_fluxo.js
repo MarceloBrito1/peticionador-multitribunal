@@ -95,6 +95,21 @@ function extrairModuloPeticionamento(pathname) {
   return match ? match[1].toLowerCase() : "";
 }
 
+function extrairTipoPeticao(pathname) {
+  const path = String(pathname || "");
+  const match = path.match(/\/peticoes\/(inicial|intermediaria)(?:\/|$)/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
+function extrairInstancia(urlObj) {
+  if (!urlObj) {
+    return "";
+  }
+  return String(urlObj.searchParams.get("instancia") || "")
+    .trim()
+    .toUpperCase();
+}
+
 function limparParametrosVolateis(urlObj) {
   const limpo = new URL(urlObj.toString());
   limpo.searchParams.delete("ticket");
@@ -203,6 +218,8 @@ function montarUrlsEsaj(servico) {
 
 function montarFluxoPeticionamentoEsaj(linkUrl, modulo) {
   const limpo = limparParametrosVolateis(linkUrl);
+  const tipoPeticao = extrairTipoPeticao(limpo.pathname);
+  const instancia = extrairInstancia(limpo);
   const serviceUrl = `${ESAJ_ORIGEM}/${modulo}/j_spring_cas_security_check`;
   const loginUrl = `${ESAJ_ORIGEM}/sajcas/login?service=${encodeURIComponent(serviceUrl)}`;
 
@@ -219,6 +236,12 @@ function montarFluxoPeticionamentoEsaj(linkUrl, modulo) {
     loginUrl,
     linkAcessoNormalizado: loginUrl,
     linkOriginalNormalizado: limpo.toString(),
+    fluxo: {
+      familia: "esaj",
+      tipo: tipoPeticao || "peticionamento",
+      modulo,
+      instancia,
+    },
   };
 }
 
@@ -242,6 +265,12 @@ function normalizarFluxoEsaj(linkUrl) {
     ...urls,
     linkAcessoNormalizado: urls.loginUrl,
     linkOriginalNormalizado,
+    fluxo: {
+      familia: "esaj",
+      tipo: "consulta",
+      servico,
+      modulo: "esaj",
+    },
   };
 }
 
@@ -254,6 +283,12 @@ function normalizarFluxoEproc(linkUrl) {
   let linkOriginalNormalizado = "";
   let loginUrl = "";
   let serviceUrl = EPROC_SERVICO_PADRAO;
+  let fluxo = {
+    familia: "eproc",
+    tipo: "portal",
+    origem: "padrao",
+    host: "eproc.tjsp.jus.br",
+  };
   if (linkUrl) {
     const linkLimpo = limparParametrosVolateis(linkUrl);
     entradaUrl = linkLimpo.toString();
@@ -263,8 +298,25 @@ function normalizarFluxoEproc(linkUrl) {
       serviceUrl =
         extrairServiceUrlDoRedirect(linkLimpo.searchParams.get("redirect_uri")) ||
         serviceUrl;
+      let redirectHost = "";
+      try {
+        const redirectRaw = decodeRepetido(linkLimpo.searchParams.get("redirect_uri") || "");
+        redirectHost = new URL(redirectRaw).hostname.toLowerCase();
+      } catch (_error) {}
+      fluxo = {
+        familia: "eproc",
+        tipo: "sso",
+        origem: "sso.tjsp.jus.br",
+        host: redirectHost || linkLimpo.hostname.toLowerCase(),
+      };
     } else if (String(linkLimpo.hostname || "").toLowerCase().includes("eproc")) {
       serviceUrl = `${linkLimpo.origin}/eproc/`;
+      fluxo = {
+        familia: "eproc",
+        tipo: "direto",
+        origem: linkLimpo.hostname.toLowerCase(),
+        host: linkLimpo.hostname.toLowerCase(),
+      };
     }
   }
 
@@ -276,6 +328,7 @@ function normalizarFluxoEproc(linkUrl) {
     loginUrl,
     linkAcessoNormalizado: entradaUrl,
     linkOriginalNormalizado,
+    fluxo,
   };
 }
 

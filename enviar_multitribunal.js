@@ -233,6 +233,7 @@ async function enviarPeticao({
       portalUrl: fluxoTjsp.portalUrl,
       serviceUrl: fluxoTjsp.serviceUrl,
       loginUrl: fluxoTjsp.loginUrl,
+      fluxo: fluxoTjsp.fluxo || {},
     };
   }
 
@@ -246,6 +247,7 @@ async function enviarPeticao({
       certificado: path.basename(certificado.arquivo),
       canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
       linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
+      fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
       modoExecucao: payloadRobo.modoExecucao,
       confirmarProtocolo: payloadRobo.confirmarProtocolo,
     },
@@ -263,6 +265,7 @@ async function enviarPeticao({
     numeroProcesso: payloadRobo.numeroProcesso,
     canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
     linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
+    fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
     modoExecucao: payloadRobo.modoExecucao,
     confirmarProtocolo: payloadRobo.confirmarProtocolo,
     respostaRobo,
