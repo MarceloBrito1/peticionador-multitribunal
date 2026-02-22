@@ -155,6 +155,30 @@ function deveRepetirFalha(respostaRobo) {
   return true;
 }
 
+function derivarStatusResultado(respostaRobo, payloadRobo) {
+  if (!respostaRobo || !respostaRobo.ok) {
+    return "falha";
+  }
+
+  const modo = String(payloadRobo?.modoExecucao || "")
+    .trim()
+    .toLowerCase();
+  if (modo === "simulado") {
+    return "simulado";
+  }
+
+  const statusExecucao = String(respostaRobo.statusExecucao || "")
+    .trim()
+    .toLowerCase();
+  if (statusExecucao === "pre_protocolo") {
+    return "pendente_confirmacao";
+  }
+  if (statusExecucao === "protocolado_sem_protocolo_extraido") {
+    return "sucesso_sem_comprovante";
+  }
+  return "sucesso";
+}
+
 function executarProcesso(comando, args, stdinPayload, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     const processo = spawn(comando, args, {
@@ -443,7 +467,7 @@ async function enviarPeticao({
   respostaRobo.tentativasExecutadas = historicoTentativas.length;
   respostaRobo.historicoTentativas = historicoTentativas;
 
-  const status = respostaRobo.ok ? "sucesso" : "falha";
+  const status = derivarStatusResultado(respostaRobo, payloadRobo);
 
   const resultado = {
     ok: Boolean(respostaRobo.ok),
@@ -459,6 +483,11 @@ async function enviarPeticao({
     confirmarProtocolo: payloadRobo.confirmarProtocolo,
     tentativasExecutadas: historicoTentativas.length,
     tentativaFinal: tentativaAtual,
+    statusExecucao: respostaRobo.statusExecucao || null,
+    protocoloOficial: respostaRobo.protocoloOficial || null,
+    comprovantes: Array.isArray(respostaRobo.comprovantes)
+      ? respostaRobo.comprovantes
+      : [],
     respostaRobo,
     concluidoEm: new Date().toISOString(),
   };
@@ -473,6 +502,8 @@ async function enviarPeticao({
       numeroProcesso: resultado.numeroProcesso,
       tentativasExecutadas: resultado.tentativasExecutadas,
       tentativaFinal: resultado.tentativaFinal,
+      statusExecucao: resultado.statusExecucao,
+      protocoloOficial: resultado.protocoloOficial,
     },
   });
 

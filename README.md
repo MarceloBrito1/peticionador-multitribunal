@@ -116,6 +116,14 @@ Para reduzir falhas transientes, o envio pode repetir automaticamente no mesmo p
 
 Cada tentativa fica registrada na auditoria (`envio_tentativa_iniciada` e `envio_tentativa_reprocesso`).
 
+No retorno do envio, o campo `status` diferencia:
+
+- `sucesso`
+- `sucesso_sem_comprovante`
+- `pendente_confirmacao`
+- `simulado`
+- `falha`
+
 ## Lote por PDFs
 
 1. Abra o card `Lote por PDFs`.
