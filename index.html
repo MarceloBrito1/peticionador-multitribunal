@@ -117,6 +117,25 @@
                 <option value="trt2">TRT2</option>
               </select>
 
+              <div id="envio-tjsp-campos">
+                <label for="tjsp-canal">Canal TJSP</label>
+                <select id="tjsp-canal" name="canalPeticionamento">
+                  <option value="eproc">eproc</option>
+                  <option value="esaj">e-SAJ</option>
+                </select>
+
+                <label for="tjsp-link-acesso">Link de acesso TJSP (opcional)</label>
+                <input
+                  id="tjsp-link-acesso"
+                  name="linkAcesso"
+                  type="text"
+                  placeholder="Cole aqui um link eproc ou e-SAJ"
+                />
+                <p class="muted">
+                  Use para direcionar entrada do robo no formato de login do tribunal.
+                </p>
+              </div>
+
               <label for="numero-processo">Numero do processo</label>
               <input id="numero-processo" name="numeroProcesso" type="text" required />
 
@@ -156,6 +175,25 @@
                 <option value="trf3">TRF3</option>
                 <option value="trt2">TRT2</option>
               </select>
+
+              <div id="lote-tjsp-campos">
+                <label for="lote-tjsp-canal">Canal TJSP</label>
+                <select id="lote-tjsp-canal" name="canalPeticionamento">
+                  <option value="eproc">eproc</option>
+                  <option value="esaj">e-SAJ</option>
+                </select>
+
+                <label for="lote-tjsp-link-acesso">Link de acesso TJSP (opcional)</label>
+                <input
+                  id="lote-tjsp-link-acesso"
+                  name="linkAcesso"
+                  type="text"
+                  placeholder="Cole aqui um link eproc ou e-SAJ"
+                />
+                <p class="muted">
+                  Mesmo link/canal sera aplicado para todos os PDFs do lote.
+                </p>
+              </div>
 
               <label for="lote-arquivos">PDFs das peticoes</label>
               <div class="file-row">

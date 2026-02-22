@@ -37,12 +37,35 @@ Pode sobrescrever com a variavel:
 
 ## Fluxo de certificado A1
 
-1. Faça login.
+1. Faca login.
 2. Abra o card `Certificado A1`.
 3. Selecione o `.pfx/.p12`.
 4. Informe a senha e salve.
 
 O arquivo e copiado para a pasta local de dados e a senha fica criptografada.
+A senha do certificado fica somente em armazenamento local do aplicativo e nunca deve ser enviada para servicos externos.
+
+## TJSP com dois canais (eproc e e-SAJ)
+
+No tribunal `TJSP`, o envio aceita dois canais de entrada:
+
+- `eproc`
+- `esaj`
+
+Nos formularios de envio unico e lote por PDFs (para `TJSP` e `TJSP 2 Grau`) existe:
+
+- Seletor `Canal TJSP`.
+- Campo opcional `Link de acesso TJSP`.
+
+Regras implementadas:
+
+- O app normaliza links de login do e-SAJ (`/sajcas/login?service=...`) e links com `servico=.../api/auth/check`.
+- O app reconhece login SSO do eproc (`https://sso.tjsp.jus.br/realms/eproc/protocol/openid-connect/auth?...`) e extrai o destino `redirect_uri` para definir o `serviceUrl`.
+- O app reconhece links de peticionamento (`/petpg`, `/petsg`, `/petcr`), incluindo peticao inicial e intermediaria de 1 instancia (`/petpg/peticoes/inicial/...` e `/petpg/peticoes/intermediaria/...`), peticao inicial/intermediaria de 2 instancia (`/petsg/peticoes/inicial/...` e `/petsg/peticoes/intermediaria/...`) e peticao inicial/intermediaria de colegio recursal (`/petcr/peticoes/inicial/...` e `/petcr/peticoes/intermediaria/...`).
+- Parametros temporarios como `ticket` e `origemServidor` sao removidos.
+- O canal selecionado deve bater com o dominio do link informado (`esaj` ou `eproc`).
+- No canal `esaj`, o robo recebe URLs normalizadas de `login`, `service/auth-check` e portal.
+- No canal `eproc`, o robo recebe URL de entrada do eproc normalizada.
 
 ## Lote por PDFs
 

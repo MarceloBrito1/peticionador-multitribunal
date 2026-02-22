@@ -5,6 +5,7 @@ const { registrarEvento } = require("./auditoria");
 const { obterCredenciaisCertificado } = require("./certificado");
 const { notificarResultadoEnvio } = require("./notificacoes");
 const { extrairNumeroProcessoDoPdf } = require("./pdf_parser");
+const { normalizarFluxoTjsp } = require("./tjsp_fluxo");
 const { validarSessao } = require("./usuarios");
 
 const ROBOS = {
@@ -179,12 +180,18 @@ function validarEntrada({ tribunal, numeroProcesso, arquivo }) {
   return tribunalFinal;
 }
 
+function usaFluxoTjsp(tribunal) {
+  return tribunal === "tjsp" || tribunal === "tjsp2";
+}
+
 async function enviarPeticao({
   token,
   tribunal,
   numeroProcesso,
   arquivo,
   descricao = "",
+  canalPeticionamento = "",
+  linkAcesso = "",
   destinatarios = [],
 }) {
   const sessao = validarSessao(token);
@@ -195,6 +202,9 @@ async function enviarPeticao({
   const certificado = obterCredenciaisCertificado();
   const tribunalFinal = validarEntrada({ tribunal, numeroProcesso, arquivo });
   const protocolo = gerarProtocolo(tribunalFinal);
+  const fluxoTjsp = usaFluxoTjsp(tribunalFinal)
+    ? normalizarFluxoTjsp({ canalPeticionamento, linkAcesso })
+    : null;
 
   const payloadRobo = {
     protocolo,
@@ -210,6 +220,18 @@ async function enviarPeticao({
     timestamp: new Date().toISOString(),
   };
 
+  if (fluxoTjsp) {
+    payloadRobo.canalPeticionamento = fluxoTjsp.canal;
+    payloadRobo.linkAcessoNormalizado = fluxoTjsp.linkAcessoNormalizado;
+    payloadRobo.tjsp = {
+      canal: fluxoTjsp.canal,
+      entradaUrl: fluxoTjsp.entradaUrl,
+      portalUrl: fluxoTjsp.portalUrl,
+      serviceUrl: fluxoTjsp.serviceUrl,
+      loginUrl: fluxoTjsp.loginUrl,
+    };
+  }
+
   registrarEvento({
     tipo: "envio_iniciado",
     usuario: sessao.usuario.email,
@@ -218,6 +240,8 @@ async function enviarPeticao({
       tribunal: tribunalFinal,
       numeroProcesso: payloadRobo.numeroProcesso,
       certificado: path.basename(certificado.arquivo),
+      canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
+      linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
     },
   });
 
@@ -231,6 +255,8 @@ async function enviarPeticao({
     tribunal: tribunalFinal,
     tribunalLabel: TRIBUNAL_LABEL[tribunalFinal],
     numeroProcesso: payloadRobo.numeroProcesso,
+    canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
+    linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
     respostaRobo,
     concluidoEm: new Date().toISOString(),
   };
@@ -280,6 +306,8 @@ async function enviarLotePorPdfs({
   tribunal,
   arquivos = [],
   descricao = "",
+  canalPeticionamento = "",
+  linkAcesso = "",
   destinatarios = [],
 }) {
   const sessao = validarSessao(token);
@@ -300,6 +328,8 @@ async function enviarLotePorPdfs({
         numeroProcesso,
         arquivo,
         descricao,
+        canalPeticionamento,
+        linkAcesso,
         destinatarios,
       });
       resultados.push({

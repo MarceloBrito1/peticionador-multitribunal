@@ -8,6 +8,10 @@ function $(id) {
   return document.getElementById(id);
 }
 
+function ehTribunalTjsp(tribunal) {
+  return tribunal === "tjsp" || tribunal === "tjsp2";
+}
+
 function setFeedback(texto, tipo = "") {
   const el = $("auth-feedback");
   el.textContent = texto;
@@ -51,6 +55,20 @@ function showAppArea(ativo) {
   $("auth-section").classList.toggle("hidden", ativo);
   $("app-section").classList.toggle("hidden", !ativo);
   $("logout-btn").classList.toggle("hidden", !ativo);
+}
+
+function atualizarCamposTjsp() {
+  const envioEhTjsp = ehTribunalTjsp($("tribunal").value);
+  $("envio-tjsp-campos").classList.toggle("hidden", !envioEhTjsp);
+  if (!envioEhTjsp) {
+    $("tjsp-link-acesso").value = "";
+  }
+
+  const loteEhTjsp = ehTribunalTjsp($("lote-tribunal").value);
+  $("lote-tjsp-campos").classList.toggle("hidden", !loteEhTjsp);
+  if (!loteEhTjsp) {
+    $("lote-tjsp-link-acesso").value = "";
+  }
 }
 
 function renderStats(resumo) {
@@ -274,12 +292,15 @@ async function onPickPdfs() {
 async function onEnviar(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const ehTjsp = ehTribunalTjsp(form.tribunal.value);
   const payload = {
     token: state.token,
     tribunal: form.tribunal.value,
     numeroProcesso: form.numeroProcesso.value,
     arquivo: form.arquivo.value,
     descricao: form.descricao.value,
+    canalPeticionamento: ehTjsp ? form.canalPeticionamento.value : "",
+    linkAcesso: ehTjsp ? form.linkAcesso.value : "",
     destinatarios: parseDestinatarios(form.destinatarios.value),
   };
 
@@ -295,11 +316,14 @@ async function onEnviar(event) {
 async function onEnviarLote(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const ehTjsp = ehTribunalTjsp(form.tribunal.value);
   const payload = {
     token: state.token,
     tribunal: form.tribunal.value,
     arquivos: state.loteArquivos,
     descricao: form.descricao.value,
+    canalPeticionamento: ehTjsp ? form.canalPeticionamento.value : "",
+    linkAcesso: ehTjsp ? form.linkAcesso.value : "",
     destinatarios: parseDestinatarios(form.destinatarios.value),
   };
 
@@ -325,6 +349,9 @@ async function init() {
   $("refresh-dashboard").addEventListener("click", carregarPainel);
   $("refresh-auditoria").addEventListener("click", carregarPainel);
   $("refresh-usuarios").addEventListener("click", carregarUsuarios);
+  $("tribunal").addEventListener("change", atualizarCamposTjsp);
+  $("lote-tribunal").addEventListener("change", atualizarCamposTjsp);
+  atualizarCamposTjsp();
   setSessionMeta();
 }
 
