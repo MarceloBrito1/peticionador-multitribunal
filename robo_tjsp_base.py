@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import random
@@ -20,6 +21,10 @@ TIMEOUT_ETAPA_PADRAO_SEGUNDOS = 60
 AUTO_SELECT_CERT_ARG = (
     '--auto-select-certificate-for-urls=[{"pattern":"https://*.tjsp.jus.br","filter":{}}]'
 )
+PROTOCOLO_REGEXES = [
+    r"protocolo(?:\s*(?:n[ou]|n[ou]mero|no|n\.?|:|#|º|°)*)\s*([A-Za-z0-9./-]{6,50})",
+    r"n[ou]mero\s+do\s+protocolo\s*[:#-]?\s*([A-Za-z0-9./-]{6,50})",
+]
 
 
 def carregar_payload() -> Dict[str, Any]:
@@ -413,6 +418,33 @@ def clicar_botao_protocolar(driver: Any, fluxo_tjsp: Dict[str, Any]) -> Tuple[bo
     )
 
 
+def abrir_comprovante(driver: Any) -> Tuple[bool, str]:
+    palavras = [
+        "comprovante",
+        "recibo",
+        "imprimir",
+        "impressao",
+        "visualizar pdf",
+        "baixar pdf",
+    ]
+    return clicar_botao_por_texto(
+        driver,
+        palavras_incluir=palavras,
+        palavras_excluir=["cancelar", "voltar", "sair", "fechar"],
+    )
+
+
+def trocar_para_ultima_aba(driver: Any) -> bool:
+    try:
+        abas = list(driver.window_handles)
+        if not abas:
+            return False
+        driver.switch_to.window(abas[-1])
+        return True
+    except Exception:
+        return False
+
+
 def extrair_referencia_tela(driver: Any) -> str:
     try:
         from selenium.webdriver.common.by import By
@@ -432,10 +464,7 @@ def extrair_referencia_tela(driver: Any) -> str:
         if texto:
             return texto[:220]
 
-    try:
-        pagina = texto_limpo(driver.page_source)
-    except Exception:
-        pagina = ""
+    pagina = extrair_texto_pagina(driver)
     if pagina:
         match = re.search(r"(protocolo[^<]{0,120})", pagina, re.IGNORECASE)
         if match:
@@ -473,6 +502,71 @@ def salvar_screenshot(driver: Any, protocolo: str, etapa: str) -> str:
         return str(arquivo)
     except Exception:
         return ""
+
+
+def salvar_html_pagina(driver: Any, protocolo: str, etapa: str) -> str:
+    pasta = data_dir_local() / "automacao"
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = pasta / f"{nome_seguro(protocolo)}_{nome_seguro(etapa)}.html"
+    try:
+        html = texto_limpo(driver.page_source)
+        if not html:
+            return ""
+        arquivo.write_text(html, encoding="utf-8")
+        return str(arquivo)
+    except Exception:
+        return ""
+
+
+def salvar_pdf_pagina(driver: Any, protocolo: str, etapa: str) -> str:
+    pasta = data_dir_local() / "automacao"
+    pasta.mkdir(parents=True, exist_ok=True)
+    arquivo = pasta / f"{nome_seguro(protocolo)}_{nome_seguro(etapa)}.pdf"
+    try:
+        payload = driver.execute_cdp_cmd(
+            "Page.printToPDF",
+            {"printBackground": True, "preferCSSPageSize": True},
+        )
+        raw = payload.get("data")
+        if not raw:
+            return ""
+        arquivo.write_bytes(base64.b64decode(raw))
+        return str(arquivo)
+    except Exception:
+        return ""
+
+
+def extrair_texto_pagina(driver: Any) -> str:
+    texto = ""
+    try:
+        texto = texto_limpo(
+            driver.execute_script("return document.body ? document.body.innerText : '';")
+        )
+    except Exception:
+        texto = ""
+
+    if texto:
+        return texto
+    try:
+        return texto_limpo(driver.page_source)
+    except Exception:
+        return ""
+
+
+def extrair_protocolo_oficial(texto: str) -> str:
+    conteudo = texto_limpo(texto)
+    if not conteudo:
+        return ""
+
+    for pattern in PROTOCOLO_REGEXES:
+        match = re.search(pattern, conteudo, re.IGNORECASE)
+        if not match:
+            continue
+        candidato = texto_limpo(match.group(1)).strip(".,;:()[]{}")
+        if len(candidato) >= 6:
+            return candidato[:80]
+
+    return ""
 
 
 def sanitizar_payload_para_log(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -520,6 +614,7 @@ def executar_fluxo_real(
     timeout_etapa = inteiro_env("PETICIONADOR_TIMEOUT_ETAPA_SEGUNDOS", TIMEOUT_ETAPA_PADRAO_SEGUNDOS)
     headless = bool_padrao(os.environ.get("PETICIONADOR_HEADLESS", "0"), False)
     confirmar_protocolo = bool_padrao(payload.get("confirmarProtocolo"), True)
+    abrir_comp_apos = bool_padrao(os.environ.get("PETICIONADOR_ABRIR_COMPROVANTE", "1"), True)
 
     importacao = importar_certificado_a1_windows(
         texto_limpo(certificado.get("arquivo")),
@@ -530,6 +625,7 @@ def executar_fluxo_real(
     driver = None
     navegador = ""
     screenshots: List[str] = []
+    comprovantes: List[str] = []
     passos: List[str] = []
     try:
         driver, navegador = criar_driver_selenium(headless=headless)
@@ -595,6 +691,7 @@ def executar_fluxo_real(
 
         clique_ok = False
         botao = ""
+        botao_comprovante = ""
         if confirmar_protocolo:
             clique_ok, botao = clicar_botao_protocolar(driver, fluxo_tjsp)
             if not clique_ok:
@@ -607,9 +704,36 @@ def executar_fluxo_real(
             if img:
                 screenshots.append(img)
 
+            if abrir_comp_apos:
+                clicou_comp, botao_comprovante = abrir_comprovante(driver)
+                if clicou_comp:
+                    passos.append(f"botao_comprovante:{botao_comprovante}")
+                    time.sleep(2)
+                    if trocar_para_ultima_aba(driver):
+                        passos.append("aba_comprovante_ativa")
+                    img = salvar_screenshot(driver, protocolo, "05_comprovante")
+                    if img:
+                        screenshots.append(img)
+
         referencia_tela = extrair_referencia_tela(driver)
         if referencia_tela:
             passos.append("referencia_identificada")
+
+        etapa_final = "05_comprovante" if confirmar_protocolo else "04_estado_final"
+        html_final = salvar_html_pagina(driver, protocolo, etapa_final)
+        if html_final:
+            comprovantes.append(html_final)
+            passos.append("html_comprovante_salvo")
+
+        pdf_final = salvar_pdf_pagina(driver, protocolo, etapa_final)
+        if pdf_final:
+            comprovantes.append(pdf_final)
+            passos.append("pdf_comprovante_salvo")
+
+        texto_pagina = extrair_texto_pagina(driver)
+        protocolo_oficial = extrair_protocolo_oficial(texto_pagina)
+        if protocolo_oficial:
+            passos.append("protocolo_oficial_identificado")
         return {
             "navegador": navegador,
             "urlFinal": texto_limpo(driver.current_url),
@@ -619,12 +743,17 @@ def executar_fluxo_real(
             "confirmarProtocolo": confirmar_protocolo,
             "cliqueProtocoloEfetuado": clique_ok,
             "botaoAcionado": botao,
+            "botaoComprovanteAcionado": botao_comprovante,
             "botaoAuxiliarUpload": botao_auxiliar,
             "referenciaTela": referencia_tela,
+            "protocoloOficial": protocolo_oficial,
             "fluxoTjsp": fluxo_tjsp,
             "passos": passos,
             "certificadoImportado": bool(importacao.get("importado")),
             "screenshots": screenshots,
+            "comprovantes": comprovantes,
+            "htmlComprovante": html_final,
+            "pdfComprovante": pdf_final,
         }
     finally:
         try:
@@ -673,6 +802,9 @@ def executar_robo(payload: Dict[str, Any], tribunal: str) -> Dict[str, Any]:
             "canalPeticionamento": canal,
             "acessoUtilizado": acesso,
             "fluxoTjsp": fluxo_tjsp,
+            "statusExecucao": "simulado",
+            "protocoloOficial": None,
+            "comprovantes": [],
             "referencia": f"{tribunal}-{random.randint(100000, 999999)}",
             "certificadoUsado": os.path.basename(texto_limpo(certificado.get("arquivo"))),
             "protocoladoEm": agora_iso_utc(),
@@ -694,16 +826,28 @@ def executar_robo(payload: Dict[str, Any], tribunal: str) -> Dict[str, Any]:
         detalhes_execucao = executar_fluxo_real(payload, acesso, certificado, fluxo_tjsp)
         confirmou = bool(detalhes_execucao.get("confirmarProtocolo"))
         protocolado = bool(detalhes_execucao.get("cliqueProtocoloEfetuado"))
+        protocolo_oficial = texto_limpo(detalhes_execucao.get("protocoloOficial"))
+        comprovantes = detalhes_execucao.get("comprovantes")
+        if not isinstance(comprovantes, list):
+            comprovantes = []
         ok = protocolado if confirmou else True
-        mensagem = (
-            "Peticao protocolada no modo real."
-            if protocolado
-            else (
-                "Fluxo real executado ate pre-protocolo; confirmacao manual requerida."
-                if not confirmou
-                else "Fluxo real executado, mas nao foi possivel confirmar o protocolo."
-            )
-        )
+        if protocolado and protocolo_oficial:
+            mensagem = f"Peticao protocolada no modo real. Protocolo oficial: {protocolo_oficial}."
+        elif protocolado:
+            mensagem = "Peticao protocolada no modo real. Protocolo oficial nao identificado automaticamente."
+        elif not confirmou:
+            mensagem = "Fluxo real executado ate pre-protocolo; confirmacao manual requerida."
+        else:
+            mensagem = "Fluxo real executado, mas nao foi possivel confirmar o protocolo."
+
+        status_execucao = "pre_protocolo"
+        if protocolado and protocolo_oficial:
+            status_execucao = "protocolado_comprovado"
+        elif protocolado:
+            status_execucao = "protocolado_sem_protocolo_extraido"
+        elif confirmou:
+            status_execucao = "falha_pos_clique"
+
         resposta = {
             "ok": ok,
             **resposta_base(payload, tribunal),
@@ -712,7 +856,9 @@ def executar_robo(payload: Dict[str, Any], tribunal: str) -> Dict[str, Any]:
             "canalPeticionamento": canal,
             "acessoUtilizado": acesso,
             "fluxoTjsp": fluxo_tjsp,
-            "statusExecucao": "protocolado" if protocolado else "pre_protocolo",
+            "statusExecucao": status_execucao,
+            "protocoloOficial": protocolo_oficial or None,
+            "comprovantes": comprovantes,
             "detalhesExecucao": detalhes_execucao,
             "referencia": f"{tribunal}-{random.randint(100000, 999999)}",
             "certificadoUsado": os.path.basename(texto_limpo(certificado.get("arquivo"))),
@@ -739,6 +885,9 @@ def executar_robo(payload: Dict[str, Any], tribunal: str) -> Dict[str, Any]:
             "canalPeticionamento": canal,
             "acessoUtilizado": acesso,
             "fluxoTjsp": fluxo_tjsp,
+            "statusExecucao": "erro",
+            "protocoloOficial": None,
+            "comprovantes": [],
             "referencia": f"{tribunal}-{random.randint(100000, 999999)}",
             "certificadoUsado": os.path.basename(texto_limpo(certificado.get("arquivo"))),
             "protocoladoEm": agora_iso_utc(),

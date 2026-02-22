@@ -91,6 +91,7 @@ No modo `real`, os robos `robo_tjsp.py` e `robo_tjsp2.py`:
   - Clicar no botao de protocolo (quando `Confirmar protocolo automaticamente = Sim`).
 - Salvam screenshots locais em `PETICIONADOR_DATA_DIR\automacao`.
 - Salvam relatorio local por protocolo em `PETICIONADOR_DATA_DIR\automacao\*_execucao.json` (sem senha do certificado).
+- Tentam abrir comprovante/recibo, extraem numero oficial do protocolo na tela e salvam evidencia HTML/PDF local.
 
 Variaveis opcionais de ambiente para ajuste:
 
@@ -100,6 +101,7 @@ Variaveis opcionais de ambiente para ajuste:
 - `PETICIONADOR_TIMEOUT_ETAPA_SEGUNDOS=60` para timeout de navegacao por etapa.
 - `PETICIONADOR_HEADLESS=0` (padrao) para execucao visivel do navegador.
 - `PETICIONADOR_BROWSER=auto|edge|chrome` para forcar navegador.
+- `PETICIONADOR_ABRIR_COMPROVANTE=1` (padrao) para tentar abrir tela de comprovante apos o clique de protocolo.
 
 ## Lote por PDFs
 
