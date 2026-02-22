@@ -102,6 +102,18 @@ Variaveis opcionais de ambiente para ajuste:
 - `PETICIONADOR_HEADLESS=0` (padrao) para execucao visivel do navegador.
 - `PETICIONADOR_BROWSER=auto|edge|chrome` para forcar navegador.
 - `PETICIONADOR_ABRIR_COMPROVANTE=1` (padrao) para tentar abrir tela de comprovante apos o clique de protocolo.
+- `PETICIONADOR_TIMEOUT_ROBO_MS` para timeout total do processo Python (padrao maior no modo `real`).
+
+## Retry automatico
+
+Para reduzir falhas transientes, o envio pode repetir automaticamente no mesmo protocolo:
+
+- `PETICIONADOR_RETRY_MAX` (padrao: `3` no modo real, `1` no simulado).
+- `PETICIONADOR_RETRY_DELAY_MS` (padrao: `2500`).
+- `PETICIONADOR_RETRY_BACKOFF_FACTOR` (padrao: `2`).
+- `PETICIONADOR_RETRY_DELAY_MAX_MS` (padrao: `60000`).
+
+Cada tentativa fica registrada na auditoria (`envio_tentativa_iniciada` e `envio_tentativa_reprocesso`).
 
 ## Lote por PDFs
 

@@ -35,6 +35,126 @@ function gerarProtocolo(tribunal) {
   return `${prefixo}-${data}-${rand}`;
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function lerIntEnv(nome, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const bruto = String(process.env[nome] || "").trim();
+  if (!bruto) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(bruto, 10);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  if (parsed < min) {
+    return min;
+  }
+  if (parsed > max) {
+    return max;
+  }
+  return parsed;
+}
+
+function lerFloatEnv(nome, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const bruto = String(process.env[nome] || "").trim();
+  if (!bruto) {
+    return fallback;
+  }
+
+  const parsed = Number.parseFloat(bruto);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  if (parsed < min) {
+    return min;
+  }
+  if (parsed > max) {
+    return max;
+  }
+  return parsed;
+}
+
+function obterTimeoutRoboMs(payload) {
+  const padrao = payload?.modoExecucao === "real" ? 480000 : 45000;
+  return lerIntEnv("PETICIONADOR_TIMEOUT_ROBO_MS", padrao, {
+    min: 5000,
+    max: 3600000,
+  });
+}
+
+function obterPoliticaRetry(payload) {
+  const modo = String(payload?.modoExecucao || "")
+    .trim()
+    .toLowerCase();
+  const tentativasPadrao = modo === "real" ? 3 : 1;
+  const tentativasMax = lerIntEnv(
+    "PETICIONADOR_RETRY_MAX",
+    tentativasPadrao,
+    {
+      min: 1,
+      max: 8,
+    }
+  );
+  const delayInicialMs = lerIntEnv("PETICIONADOR_RETRY_DELAY_MS", 2500, {
+    min: 0,
+    max: 120000,
+  });
+  const fatorBackoff = lerFloatEnv("PETICIONADOR_RETRY_BACKOFF_FACTOR", 2, {
+    min: 1,
+    max: 6,
+  });
+  const delayMaxMs = lerIntEnv("PETICIONADOR_RETRY_DELAY_MAX_MS", 60000, {
+    min: 1000,
+    max: 300000,
+  });
+
+  return {
+    tentativasMax,
+    delayInicialMs,
+    fatorBackoff,
+    delayMaxMs,
+  };
+}
+
+function mensagemFalha(respostaRobo) {
+  return String(respostaRobo?.mensagem || respostaRobo?.erroOriginal || "")
+    .trim()
+    .toLowerCase();
+}
+
+function falhaDefinitivaParaRetry(respostaRobo) {
+  const msg = mensagemFalha(respostaRobo);
+  if (!msg) {
+    return false;
+  }
+
+  const definitivas = [
+    "canal tjsp invalido",
+    "fluxo e-saj",
+    "fluxo eproc sem url",
+    "certificado a1 nao informado",
+    "arquivo da peticao nao informado",
+    "arquivo da peticao nao encontrado",
+    "nao foi possivel localizar campo de upload",
+    "nao foi possivel localizar botao de protocolo",
+    "numero do processo",
+  ];
+  return definitivas.some((token) => msg.includes(token));
+}
+
+function deveRepetirFalha(respostaRobo) {
+  if (!respostaRobo || respostaRobo.ok) {
+    return false;
+  }
+  if (falhaDefinitivaParaRetry(respostaRobo)) {
+    return false;
+  }
+  return true;
+}
+
 function executarProcesso(comando, args, stdinPayload, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     const processo = spawn(comando, args, {
@@ -127,6 +247,7 @@ function parseRoboOutput(stdout, fallbackPayload) {
 async function executarRoboPython(scriptName, payload) {
   const scriptPath = path.join(__dirname, scriptName);
   const payloadSerializado = JSON.stringify(payload);
+  const timeoutMs = obterTimeoutRoboMs(payload);
   const candidatos = [];
 
   if ((process.env.PYTHON_BIN || "").trim()) {
@@ -146,7 +267,8 @@ async function executarRoboPython(scriptName, payload) {
       const { stdout } = await executarProcesso(
         candidato.comando,
         candidato.args,
-        payloadSerializado
+        payloadSerializado,
+        timeoutMs
       );
       return parseRoboOutput(stdout, payload);
     } catch (error) {
@@ -253,7 +375,74 @@ async function enviarPeticao({
     },
   });
 
-  const respostaRobo = await executarRoboPython(ROBOS[tribunalFinal], payloadRobo);
+  const politicaRetry = obterPoliticaRetry(payloadRobo);
+  let respostaRobo = null;
+  let tentativaAtual = 0;
+  const historicoTentativas = [];
+  let delayAtual = politicaRetry.delayInicialMs;
+
+  for (let tentativa = 1; tentativa <= politicaRetry.tentativasMax; tentativa += 1) {
+    tentativaAtual = tentativa;
+    registrarEvento({
+      tipo: "envio_tentativa_iniciada",
+      usuario: sessao.usuario.email,
+      detalhes: {
+        protocolo,
+        tribunal: tribunalFinal,
+        tentativa,
+        tentativasMax: politicaRetry.tentativasMax,
+        modoExecucao: payloadRobo.modoExecucao,
+      },
+    });
+
+    respostaRobo = await executarRoboPython(ROBOS[tribunalFinal], payloadRobo);
+    historicoTentativas.push({
+      tentativa,
+      ok: Boolean(respostaRobo.ok),
+      mensagem: String(respostaRobo.mensagem || "").slice(0, 500),
+      statusExecucao: respostaRobo.statusExecucao || null,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (respostaRobo.ok || tentativa >= politicaRetry.tentativasMax) {
+      break;
+    }
+    if (!deveRepetirFalha(respostaRobo)) {
+      break;
+    }
+
+    registrarEvento({
+      tipo: "envio_tentativa_reprocesso",
+      usuario: sessao.usuario.email,
+      detalhes: {
+        protocolo,
+        tribunal: tribunalFinal,
+        tentativaFalhou: tentativa,
+        proximaTentativa: tentativa + 1,
+        delayMs: delayAtual,
+        mensagem: String(respostaRobo.mensagem || "").slice(0, 300),
+      },
+    });
+
+    if (delayAtual > 0) {
+      await delay(delayAtual);
+      delayAtual = Math.min(
+        Math.round(delayAtual * politicaRetry.fatorBackoff),
+        politicaRetry.delayMaxMs
+      );
+    }
+  }
+
+  respostaRobo = respostaRobo || {
+    ok: false,
+    mensagem: "Robo sem resposta valida.",
+    tribunal: tribunalFinal,
+    protocolo,
+  };
+  respostaRobo.tentativaAtual = tentativaAtual;
+  respostaRobo.tentativasExecutadas = historicoTentativas.length;
+  respostaRobo.historicoTentativas = historicoTentativas;
+
   const status = respostaRobo.ok ? "sucesso" : "falha";
 
   const resultado = {
@@ -268,6 +457,8 @@ async function enviarPeticao({
     fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
     modoExecucao: payloadRobo.modoExecucao,
     confirmarProtocolo: payloadRobo.confirmarProtocolo,
+    tentativasExecutadas: historicoTentativas.length,
+    tentativaFinal: tentativaAtual,
     respostaRobo,
     concluidoEm: new Date().toISOString(),
   };
@@ -280,6 +471,8 @@ async function enviarPeticao({
       status: resultado.status,
       tribunal: resultado.tribunal,
       numeroProcesso: resultado.numeroProcesso,
+      tentativasExecutadas: resultado.tentativasExecutadas,
+      tentativaFinal: resultado.tentativaFinal,
     },
   });
 
