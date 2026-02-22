@@ -115,6 +115,7 @@ Para reduzir falhas transientes, o envio pode repetir automaticamente no mesmo p
 - `PETICIONADOR_RETRY_DELAY_MAX_MS` (padrao: `60000`).
 
 Cada tentativa fica registrada na auditoria (`envio_tentativa_iniciada` e `envio_tentativa_reprocesso`).
+Enquanto um envio estiver em andamento, o sistema bloqueia outra execucao simultanea para o mesmo `tribunal + processo + arquivo + modo`.
 
 No retorno do envio, o campo `status` diferencia:
 

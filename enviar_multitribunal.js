@@ -14,6 +14,7 @@ const ROBOS = {
   trf3: "robo_trf3.py",
   trt2: "robo_trt2.py",
 };
+const ENVIOS_EM_ANDAMENTO = new Set();
 
 const TRIBUNAL_LABEL = {
   tjsp: "TJSP",
@@ -330,6 +331,20 @@ function usaFluxoTjsp(tribunal) {
   return tribunal === "tjsp" || tribunal === "tjsp2";
 }
 
+function montarChaveEnvio({ tribunal, numeroProcesso, arquivo, modoExecucao }) {
+  const tribunalKey = String(tribunal || "")
+    .trim()
+    .toLowerCase();
+  const processoKey = String(numeroProcesso || "")
+    .trim()
+    .toLowerCase();
+  const arquivoKey = path.resolve(String(arquivo || "")).toLowerCase();
+  const modoKey = String(modoExecucao || "")
+    .trim()
+    .toLowerCase();
+  return [tribunalKey, processoKey, arquivoKey, modoKey].join("|");
+}
+
 async function enviarPeticao({
   token,
   tribunal,
@@ -369,6 +384,19 @@ async function enviarPeticao({
     },
     timestamp: new Date().toISOString(),
   };
+  const chaveEnvio = montarChaveEnvio({
+    tribunal: tribunalFinal,
+    numeroProcesso: payloadRobo.numeroProcesso,
+    arquivo: payloadRobo.arquivo,
+    modoExecucao: payloadRobo.modoExecucao,
+  });
+
+  if (ENVIOS_EM_ANDAMENTO.has(chaveEnvio)) {
+    throw new Error(
+      "Ja existe envio em andamento para este tribunal/processo/arquivo. Aguarde concluir."
+    );
+  }
+  ENVIOS_EM_ANDAMENTO.add(chaveEnvio);
 
   if (fluxoTjsp) {
     payloadRobo.canalPeticionamento = fluxoTjsp.canal;
@@ -383,139 +411,143 @@ async function enviarPeticao({
     };
   }
 
-  registrarEvento({
-    tipo: "envio_iniciado",
-    usuario: sessao.usuario.email,
-    detalhes: {
+  try {
+    registrarEvento({
+      tipo: "envio_iniciado",
+      usuario: sessao.usuario.email,
+      detalhes: {
+        protocolo,
+        tribunal: tribunalFinal,
+        numeroProcesso: payloadRobo.numeroProcesso,
+        certificado: path.basename(certificado.arquivo),
+        canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
+        linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
+        fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
+        modoExecucao: payloadRobo.modoExecucao,
+        confirmarProtocolo: payloadRobo.confirmarProtocolo,
+      },
+    });
+
+    const politicaRetry = obterPoliticaRetry(payloadRobo);
+    let respostaRobo = null;
+    let tentativaAtual = 0;
+    const historicoTentativas = [];
+    let delayAtual = politicaRetry.delayInicialMs;
+
+    for (let tentativa = 1; tentativa <= politicaRetry.tentativasMax; tentativa += 1) {
+      tentativaAtual = tentativa;
+      registrarEvento({
+        tipo: "envio_tentativa_iniciada",
+        usuario: sessao.usuario.email,
+        detalhes: {
+          protocolo,
+          tribunal: tribunalFinal,
+          tentativa,
+          tentativasMax: politicaRetry.tentativasMax,
+          modoExecucao: payloadRobo.modoExecucao,
+        },
+      });
+
+      respostaRobo = await executarRoboPython(ROBOS[tribunalFinal], payloadRobo);
+      historicoTentativas.push({
+        tentativa,
+        ok: Boolean(respostaRobo.ok),
+        mensagem: String(respostaRobo.mensagem || "").slice(0, 500),
+        statusExecucao: respostaRobo.statusExecucao || null,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (respostaRobo.ok || tentativa >= politicaRetry.tentativasMax) {
+        break;
+      }
+      if (!deveRepetirFalha(respostaRobo)) {
+        break;
+      }
+
+      registrarEvento({
+        tipo: "envio_tentativa_reprocesso",
+        usuario: sessao.usuario.email,
+        detalhes: {
+          protocolo,
+          tribunal: tribunalFinal,
+          tentativaFalhou: tentativa,
+          proximaTentativa: tentativa + 1,
+          delayMs: delayAtual,
+          mensagem: String(respostaRobo.mensagem || "").slice(0, 300),
+        },
+      });
+
+      if (delayAtual > 0) {
+        await delay(delayAtual);
+        delayAtual = Math.min(
+          Math.round(delayAtual * politicaRetry.fatorBackoff),
+          politicaRetry.delayMaxMs
+        );
+      }
+    }
+
+    respostaRobo = respostaRobo || {
+      ok: false,
+      mensagem: "Robo sem resposta valida.",
+      tribunal: tribunalFinal,
+      protocolo,
+    };
+    respostaRobo.tentativaAtual = tentativaAtual;
+    respostaRobo.tentativasExecutadas = historicoTentativas.length;
+    respostaRobo.historicoTentativas = historicoTentativas;
+
+    const status = derivarStatusResultado(respostaRobo, payloadRobo);
+
+    const resultado = {
+      ok: Boolean(respostaRobo.ok),
+      status,
       protocolo,
       tribunal: tribunalFinal,
+      tribunalLabel: TRIBUNAL_LABEL[tribunalFinal],
       numeroProcesso: payloadRobo.numeroProcesso,
-      certificado: path.basename(certificado.arquivo),
       canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
       linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
       fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
       modoExecucao: payloadRobo.modoExecucao,
       confirmarProtocolo: payloadRobo.confirmarProtocolo,
-    },
-  });
-
-  const politicaRetry = obterPoliticaRetry(payloadRobo);
-  let respostaRobo = null;
-  let tentativaAtual = 0;
-  const historicoTentativas = [];
-  let delayAtual = politicaRetry.delayInicialMs;
-
-  for (let tentativa = 1; tentativa <= politicaRetry.tentativasMax; tentativa += 1) {
-    tentativaAtual = tentativa;
-    registrarEvento({
-      tipo: "envio_tentativa_iniciada",
-      usuario: sessao.usuario.email,
-      detalhes: {
-        protocolo,
-        tribunal: tribunalFinal,
-        tentativa,
-        tentativasMax: politicaRetry.tentativasMax,
-        modoExecucao: payloadRobo.modoExecucao,
-      },
-    });
-
-    respostaRobo = await executarRoboPython(ROBOS[tribunalFinal], payloadRobo);
-    historicoTentativas.push({
-      tentativa,
-      ok: Boolean(respostaRobo.ok),
-      mensagem: String(respostaRobo.mensagem || "").slice(0, 500),
+      tentativasExecutadas: historicoTentativas.length,
+      tentativaFinal: tentativaAtual,
       statusExecucao: respostaRobo.statusExecucao || null,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (respostaRobo.ok || tentativa >= politicaRetry.tentativasMax) {
-      break;
-    }
-    if (!deveRepetirFalha(respostaRobo)) {
-      break;
-    }
+      protocoloOficial: respostaRobo.protocoloOficial || null,
+      comprovantes: Array.isArray(respostaRobo.comprovantes)
+        ? respostaRobo.comprovantes
+        : [],
+      respostaRobo,
+      concluidoEm: new Date().toISOString(),
+    };
 
     registrarEvento({
-      tipo: "envio_tentativa_reprocesso",
+      tipo: resultado.ok ? "envio_concluido" : "envio_falhou",
       usuario: sessao.usuario.email,
       detalhes: {
-        protocolo,
-        tribunal: tribunalFinal,
-        tentativaFalhou: tentativa,
-        proximaTentativa: tentativa + 1,
-        delayMs: delayAtual,
-        mensagem: String(respostaRobo.mensagem || "").slice(0, 300),
+        protocolo: resultado.protocolo,
+        status: resultado.status,
+        tribunal: resultado.tribunal,
+        numeroProcesso: resultado.numeroProcesso,
+        tentativasExecutadas: resultado.tentativasExecutadas,
+        tentativaFinal: resultado.tentativaFinal,
+        statusExecucao: resultado.statusExecucao,
+        protocoloOficial: resultado.protocoloOficial,
       },
     });
 
-    if (delayAtual > 0) {
-      await delay(delayAtual);
-      delayAtual = Math.min(
-        Math.round(delayAtual * politicaRetry.fatorBackoff),
-        politicaRetry.delayMaxMs
-      );
-    }
+    const notificacoes = await notificarResultadoEnvio({
+      destinatarios,
+      resultado,
+    });
+
+    return {
+      ...resultado,
+      notificacoes,
+    };
+  } finally {
+    ENVIOS_EM_ANDAMENTO.delete(chaveEnvio);
   }
-
-  respostaRobo = respostaRobo || {
-    ok: false,
-    mensagem: "Robo sem resposta valida.",
-    tribunal: tribunalFinal,
-    protocolo,
-  };
-  respostaRobo.tentativaAtual = tentativaAtual;
-  respostaRobo.tentativasExecutadas = historicoTentativas.length;
-  respostaRobo.historicoTentativas = historicoTentativas;
-
-  const status = derivarStatusResultado(respostaRobo, payloadRobo);
-
-  const resultado = {
-    ok: Boolean(respostaRobo.ok),
-    status,
-    protocolo,
-    tribunal: tribunalFinal,
-    tribunalLabel: TRIBUNAL_LABEL[tribunalFinal],
-    numeroProcesso: payloadRobo.numeroProcesso,
-    canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
-    linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
-    fluxoTjsp: fluxoTjsp ? fluxoTjsp.fluxo || null : null,
-    modoExecucao: payloadRobo.modoExecucao,
-    confirmarProtocolo: payloadRobo.confirmarProtocolo,
-    tentativasExecutadas: historicoTentativas.length,
-    tentativaFinal: tentativaAtual,
-    statusExecucao: respostaRobo.statusExecucao || null,
-    protocoloOficial: respostaRobo.protocoloOficial || null,
-    comprovantes: Array.isArray(respostaRobo.comprovantes)
-      ? respostaRobo.comprovantes
-      : [],
-    respostaRobo,
-    concluidoEm: new Date().toISOString(),
-  };
-
-  registrarEvento({
-    tipo: resultado.ok ? "envio_concluido" : "envio_falhou",
-    usuario: sessao.usuario.email,
-    detalhes: {
-      protocolo: resultado.protocolo,
-      status: resultado.status,
-      tribunal: resultado.tribunal,
-      numeroProcesso: resultado.numeroProcesso,
-      tentativasExecutadas: resultado.tentativasExecutadas,
-      tentativaFinal: resultado.tentativaFinal,
-      statusExecucao: resultado.statusExecucao,
-      protocoloOficial: resultado.protocoloOficial,
-    },
-  });
-
-  const notificacoes = await notificarResultadoEnvio({
-    destinatarios,
-    resultado,
-  });
-
-  return {
-    ...resultado,
-    notificacoes,
-  };
 }
 
 async function enviarLote({ token, itens = [] }) {
