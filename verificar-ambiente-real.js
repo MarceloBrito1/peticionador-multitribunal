@@ -1,0 +1,146 @@
+const { spawnSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const certificado = require("./certificado");
+
+function run(command, args = []) {
+  try {
+    const result = spawnSync(command, args, {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    return {
+      ok: result.status === 0,
+      status: result.status,
+      stdout: String(result.stdout || "").trim(),
+      stderr: String(result.stderr || "").trim(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: -1,
+      stdout: "",
+      stderr: error.message,
+    };
+  }
+}
+
+function detectPython() {
+  const candidatos = [
+    { cmd: process.env.PYTHON_BIN || "", args: ["-V"] },
+    { cmd: "python", args: ["-V"] },
+    { cmd: "py", args: ["-3", "-V"] },
+    { cmd: "py", args: ["-V"] },
+  ].filter((item) => String(item.cmd || "").trim());
+
+  for (const candidato of candidatos) {
+    const res = run(candidato.cmd, candidato.args);
+    if (res.ok) {
+      const versao = res.stdout || res.stderr || "";
+      return {
+        ok: true,
+        command: `${candidato.cmd} ${candidato.args.join(" ")}`.trim(),
+        version: versao,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    command: null,
+    version: "",
+  };
+}
+
+function checkSelenium(pyCommand) {
+  if (!pyCommand) {
+    return { ok: false, detail: "Python nao encontrado." };
+  }
+
+  const partes = pyCommand.split(" ");
+  const cmd = partes[0];
+  const argsBase = partes.slice(1);
+  const args = argsBase.concat([
+    "-c",
+    "import importlib.util; print(bool(importlib.util.find_spec('selenium')))",
+  ]);
+  const res = run(cmd, args);
+  if (!res.ok) {
+    return { ok: false, detail: res.stderr || "Falha ao validar selenium." };
+  }
+  const flag = String(res.stdout || "").trim().toLowerCase();
+  return {
+    ok: flag === "true",
+    detail: flag === "true" ? "selenium instalado" : "selenium nao instalado",
+  };
+}
+
+function checkBrowsers() {
+  const edge = run("where", ["msedge"]);
+  const chrome = run("where", ["chrome"]);
+  return {
+    edge: edge.ok,
+    chrome: chrome.ok,
+    edgePath: edge.ok ? edge.stdout.split(/\r?\n/)[0] : "",
+    chromePath: chrome.ok ? chrome.stdout.split(/\r?\n/)[0] : "",
+  };
+}
+
+function checkDataDir() {
+  const dataDir =
+    String(process.env.PETICIONADOR_DATA_DIR || "").trim() ||
+    path.join(process.cwd(), "data");
+  const exists = fs.existsSync(dataDir);
+  return {
+    path: dataDir,
+    exists,
+  };
+}
+
+function main() {
+  const py = detectPython();
+  const selenium = checkSelenium(py.command);
+  const browsers = checkBrowsers();
+  const cert = certificado.obterStatusCertificado();
+  const dataDir = checkDataDir();
+
+  const checks = [
+    { key: "python", ok: py.ok, detail: py.version || "python nao encontrado" },
+    { key: "selenium", ok: selenium.ok, detail: selenium.detail },
+    {
+      key: "browser",
+      ok: browsers.edge || browsers.chrome,
+      detail: `edge=${browsers.edge} chrome=${browsers.chrome}`,
+    },
+    {
+      key: "certificado",
+      ok: Boolean(cert.configurado),
+      detail: cert.configurado ? cert.arquivo : "certificado nao configurado",
+    },
+  ];
+
+  const okGeral = checks.every((item) => item.ok);
+  const payload = {
+    ok: okGeral,
+    checks,
+    python: py,
+    selenium,
+    browsers,
+    certificado: cert,
+    dataDir,
+    sugestoes: [
+      !py.ok ? "Instale Python 3 e deixe no PATH." : null,
+      py.ok && !selenium.ok ? "Execute: pip install -r requirements.txt" : null,
+      !browsers.edge && !browsers.chrome
+        ? "Instale Microsoft Edge ou Google Chrome."
+        : null,
+      !cert.configurado
+        ? "Configure o certificado A1 no card 'Certificado A1' do app."
+        : null,
+    ].filter(Boolean),
+  };
+
+  console.log(JSON.stringify(payload, null, 2));
+}
+
+main();

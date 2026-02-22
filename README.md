@@ -139,3 +139,11 @@ O sistema extrai o numero CNJ de cada PDF e envia cada arquivo no respectivo pro
 ```bash
 npm run smoke
 ```
+
+## Check de ambiente real
+
+Para validar prerequisitos locais do modo real:
+
+```bash
+npm run check:real
+```
