@@ -1,6 +1,12 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+
+process.env.PETICIONADOR_DATA_DIR =
+  process.env.PETICIONADOR_DATA_DIR ||
+  path.join(os.homedir(), "PeticionadorMultitribunalData");
+
 const certificado = require("./certificado");
 
 function run(command, args = []) {
@@ -111,9 +117,7 @@ function checkBrowsers() {
 }
 
 function checkDataDir() {
-  const dataDir =
-    String(process.env.PETICIONADOR_DATA_DIR || "").trim() ||
-    path.join(process.cwd(), "data");
+  const dataDir = String(process.env.PETICIONADOR_DATA_DIR || "").trim();
   const exists = fs.existsSync(dataDir);
   return {
     path: dataDir,
