@@ -12,12 +12,20 @@ Aplicativo Electron com:
 
 - Node.js 18+
 - Python 3+ no PATH (`python` ou `py`) para executar robos
+- Selenium no Python (`pip install selenium`)
+- Microsoft Edge ou Google Chrome instalados no Windows
 
 ## Instalar e executar
 
 ```bash
 npm install
 npm start
+```
+
+Dependencias Python:
+
+```bash
+pip install -r requirements.txt
 ```
 
 Usuario admin padrao:
@@ -55,6 +63,8 @@ No tribunal `TJSP`, o envio aceita dois canais de entrada:
 Nos formularios de envio unico e lote por PDFs (para `TJSP` e `TJSP 2 Grau`) existe:
 
 - Seletor `Canal TJSP`.
+- Seletor `Modo de execucao` (`real` ou `simulado`).
+- Seletor `Confirmar protocolo automaticamente`.
 - Campo opcional `Link de acesso TJSP`.
 
 Regras implementadas:
@@ -66,6 +76,28 @@ Regras implementadas:
 - O canal selecionado deve bater com o dominio do link informado (`esaj` ou `eproc`).
 - No canal `esaj`, o robo recebe URLs normalizadas de `login`, `service/auth-check` e portal.
 - No canal `eproc`, o robo recebe URL de entrada do eproc normalizada.
+
+## Automacao real (Selenium)
+
+No modo `real`, os robos `robo_tjsp.py` e `robo_tjsp2.py`:
+
+- Importam o certificado A1 no repositorio `CurrentUser\My` do Windows (local).
+- Iniciam navegador Selenium (Edge, com fallback para Chrome).
+- Aplicam auto-selecao de certificado para dominios `*.tjsp.jus.br`.
+- Aguardam login com certificado, acessam o destino e tentam:
+  - Preencher numero do processo.
+  - Preencher descricao.
+  - Anexar PDF.
+  - Clicar no botao de protocolo (quando `Confirmar protocolo automaticamente = Sim`).
+- Salvam screenshots locais em `PETICIONADOR_DATA_DIR\automacao`.
+
+Variaveis opcionais de ambiente para ajuste:
+
+- `PETICIONADOR_IMPORTAR_CERT_A1=1` (padrao) para importar o PFX automaticamente.
+- `PETICIONADOR_REMOVER_CERT_A1=1` para remover o certificado importado ao final do robo.
+- `PETICIONADOR_TIMEOUT_LOGIN_SEGUNDOS=240` para timeout de login.
+- `PETICIONADOR_TIMEOUT_ETAPA_SEGUNDOS=60` para timeout de navegacao por etapa.
+- `PETICIONADOR_HEADLESS=0` (padrao) para execucao visivel do navegador.
 
 ## Lote por PDFs
 

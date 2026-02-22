@@ -43,6 +43,16 @@ function parseDestinatarios(raw) {
     });
 }
 
+function parseBool(raw, fallback = false) {
+  const valor = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (!valor) {
+    return fallback;
+  }
+  return valor === "true" || valor === "1" || valor === "sim" || valor === "yes";
+}
+
 function formatDateTime(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -301,6 +311,8 @@ async function onEnviar(event) {
     descricao: form.descricao.value,
     canalPeticionamento: ehTjsp ? form.canalPeticionamento.value : "",
     linkAcesso: ehTjsp ? form.linkAcesso.value : "",
+    modoExecucao: ehTjsp ? form.modoExecucao.value : "simulado",
+    confirmarProtocolo: ehTjsp ? parseBool(form.confirmarProtocolo.value, true) : true,
     destinatarios: parseDestinatarios(form.destinatarios.value),
   };
 
@@ -324,6 +336,8 @@ async function onEnviarLote(event) {
     descricao: form.descricao.value,
     canalPeticionamento: ehTjsp ? form.canalPeticionamento.value : "",
     linkAcesso: ehTjsp ? form.linkAcesso.value : "",
+    modoExecucao: ehTjsp ? form.modoExecucao.value : "simulado",
+    confirmarProtocolo: ehTjsp ? parseBool(form.confirmarProtocolo.value, true) : true,
     destinatarios: parseDestinatarios(form.destinatarios.value),
   };
 

@@ -192,6 +192,8 @@ async function enviarPeticao({
   descricao = "",
   canalPeticionamento = "",
   linkAcesso = "",
+  modoExecucao = "",
+  confirmarProtocolo = true,
   destinatarios = [],
 }) {
   const sessao = validarSessao(token);
@@ -213,6 +215,8 @@ async function enviarPeticao({
     arquivo: String(arquivo).trim(),
     descricao: String(descricao || "").trim(),
     usuario: sessao.usuario.email,
+    modoExecucao: String(modoExecucao || "").trim().toLowerCase() || "simulado",
+    confirmarProtocolo: Boolean(confirmarProtocolo),
     certificado: {
       arquivo: certificado.arquivo,
       senha: certificado.senha,
@@ -242,6 +246,8 @@ async function enviarPeticao({
       certificado: path.basename(certificado.arquivo),
       canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
       linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
+      modoExecucao: payloadRobo.modoExecucao,
+      confirmarProtocolo: payloadRobo.confirmarProtocolo,
     },
   });
 
@@ -257,6 +263,8 @@ async function enviarPeticao({
     numeroProcesso: payloadRobo.numeroProcesso,
     canalPeticionamento: fluxoTjsp ? fluxoTjsp.canal : null,
     linkAcessoNormalizado: fluxoTjsp ? fluxoTjsp.linkAcessoNormalizado : null,
+    modoExecucao: payloadRobo.modoExecucao,
+    confirmarProtocolo: payloadRobo.confirmarProtocolo,
     respostaRobo,
     concluidoEm: new Date().toISOString(),
   };
@@ -308,6 +316,8 @@ async function enviarLotePorPdfs({
   descricao = "",
   canalPeticionamento = "",
   linkAcesso = "",
+  modoExecucao = "",
+  confirmarProtocolo = true,
   destinatarios = [],
 }) {
   const sessao = validarSessao(token);
@@ -330,6 +340,8 @@ async function enviarLotePorPdfs({
         descricao,
         canalPeticionamento,
         linkAcesso,
+        modoExecucao,
+        confirmarProtocolo,
         destinatarios,
       });
       resultados.push({
