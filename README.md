@@ -53,6 +53,12 @@ Pode sobrescrever com a variavel:
 O arquivo e copiado para a pasta local de dados e a senha fica criptografada.
 A senha do certificado fica somente em armazenamento local do aplicativo e nunca deve ser enviada para servicos externos.
 
+Opcao CLI (senha pedida localmente com entrada oculta):
+
+```bash
+npm run cert:config -- "C:\caminho\certificado.pfx"
+```
+
 ## TJSP com dois canais (eproc e e-SAJ)
 
 No tribunal `TJSP`, o envio aceita dois canais de entrada:
